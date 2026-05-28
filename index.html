@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Advanced Primary LMS</title>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<style>
+/* ================= BASE ================= */
+body {
+  font-family: Arial;
+  text-align: center;
+
+  background-image: url("https://images.unsplash.com/photo-1522202176988-66273c2fd55f");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  margin: 0;
+  padding: 0;
+}
+#clock {
+  position: fixed;
+  top: 15px;
+  right: 20px;
+  padding: 12px 18px;
+  border-radius: 12px;
+
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 16px;
+  font-weight: bold;
+
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+
+  box-shadow: 0 0 15px rgba(0,255,255,0.4);
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+    box-shadow: 0 0 10px rgba(0,255,255,0.3);
+  }
+  to {
+    box-shadow: 0 0 25px rgba(0,255,255,0.9);
+  }
+}
+
+/* 🔥 Dark overlay kugirango text igarare neza */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.35);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ================= BOX ================= */
+.box {
+  background: white;
+  width: 400px;
+  margin: auto;
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 0 15px gray;
+}
+
+/* ================= INPUT ================= */
+input, select, button {
+  padding: 10px;
+  width: 90%;
+  margin-top: 10px;
+  font-size: 16px;
+  border-radius: 6px;
+}
+
+/* ================= BUTTONS ================= */
+button {
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+.login { background: green; }
+.submit { background: blue; }
+.next { background: orange; }
+
+/* ================= HIDE ================= */
+.hidden {
+  display: none;
+}
+
+/* ================= OPTIONS ================= */
+.option {
+  background: #eee;
+  margin: 5px;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: 0.3s;
+}
+
+.option:hover {
+  background: #ddd;
+}
+
+.selected {
+  background: #cce5ff;
+}
+
+/* ================= TIMER ================= */
+#timer {
+  font-size: 22px;
+  color: red;
+  font-weight: bold;
+}
+
+/* ================= LEADERBOARD ================= */
+#leaderboard {
+  text-align: left;
+  background: #f4f4f4;
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+/* ================= TOAST ================= */
+.toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: none;
+}
+
+/* ================= ANIMATION: RESTART ZOOM ================= */
+.zoom-reset {
+  animation: zoomOut 0.4s ease;
+}
+
+@keyframes zoomOut {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* ================= MOBILE RESPONSIVE ================= */
+@media (max-width: 500px) {
+  .box {
+    width: 90%;
+  }
+}
+</style>
+
+<body>
+<div id="clock"></div>
+<div id="toast" class="toast"></div>
+
+<div class="box" id="loginBox">
+  <h2>🎓 LMS Login</h2>
+  <input id="studentName" placeholder="Enter Student Name">
+  <button class="login" onclick="login()">Login</button>
+
+
+  <h3>🏆 Leaderboard</h3>
+  <div id="leaderboard"></div>
+</div>
+
+<div class="box hidden" id="gameBox">
+  <h2>🎮 LMS Game</h2>
+
+  <p>Student: <b id="name"></b></p>
+  <p>Score: <b id="score">0</b></p>
+<select id="operation">
+  <option value="random">Random</option>
+  <option value="+">Addition (+)</option>
+  <option value="-">Subtraction (-)</option>
+  <option value="*">Multiplication (*)</option>
+</select>
+
+<select id="subject" onchange="generateQuestion()">
+  <option value="math">Math</option>
+  <option value="kinyarwanda">Kinyarwanda</option>
+  <option value="english">English</option>
+  <option value="science">Science</option>
+  <option value="social">Social Studies</option>
+</select>
+  <select id="level" onchange="generateQuestion()">
+    <option value="easy">Easy</option>
+    <option value="medium">Medium</option>
+    <option value="hard">Hard</option>
+  </select>
+
+  <h3 id="timer">30</h3>
+  <h3 id="question"></h3>
+  <div id="options"></div>
+
+  <button class="submit" onclick="submitAnswer()">Submit</button>
+  <button class="next" onclick="generateQuestion()">Next</button>
+<button class="next" onclick="logout()">🚪 Logout</button>
+<button class="next" onclick="restart()">🔁 Restart</button>
+
+  <p id="result"></p>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  onSnapshot,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+/* ================= FIREBASE ================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyA17n69CYOGBvQO8-rdfNIRwcn0fXThiJg",
+  authDomain: "primary-lms.firebaseapp.com",
+  projectId: "primary-lms",
+  storageBucket: "primary-lms.firebasestorage.app",
+  messagingSenderId: "536540006328",
+  appId: "1:536540006328:web:f5e011acf8d7ceb783714d"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+/* ================= VARIABLES ================= */
+let student = "";
+let score = 0;
+let selected = "";
+let correct = "";
+let timer = 30;
+let interval;
+
+/* ================= LOGIN ================= */
+window.login = function () {
+  student = document.getElementById("studentName").value;
+  if (!student) return alert("Enter name!");
+
+  document.getElementById("loginBox").classList.add("hidden");
+  document.getElementById("gameBox").classList.remove("hidden");
+
+  document.getElementById("name").innerText = student;
+
+  showLeaderboard();
+  generateQuestion();
+};
+
+/* ================= TIMER ================= */
+function startTimer() {
+  clearInterval(interval);
+  timer = 30;
+
+  interval = setInterval(() => {
+    timer--;
+    document.getElementById("timer").innerText = timer;
+
+    if (timer <= 0) {
+      clearInterval(interval);
+      speak("Time is up");
+      generateQuestion();
+    }
+  }, 1000);
+}
+
+/* ================= QUESTIONS ================= */
+window.generateQuestion = function () {
+  selected = "";
+  startTimer();
+
+  let subject = document.getElementById("subject").value;
+  let level = document.getElementById("level").value;
+
+  let max = level === "easy" ? 10 : level === "medium" ? 20 : 50;
+
+  let banks = {
+
+    math: () => {
+      let a = Math.floor(Math.random() * max);
+      let b = Math.floor(Math.random() * max);
+
+      let ops = ["+", "-", "*"];
+      let op = ops[Math.floor(Math.random() * ops.length)];
+
+      if (op === "+") correct = a + b;
+      if (op === "-") correct = a - b;
+      if (op === "*") correct = a * b;
+
+      document.getElementById("question").innerText =
+        `Solve: ${a} ${op} ${b}`;
+
+      showOptions([correct, correct + 1, correct - 1, correct + 2]);
+    },
+
+    kinyarwanda: () => {
+      let data = [
+        {q:"Inka means?", a:"cow", o:["cow","dog","car","book"]},
+        {q:"Amazi means?", a:"water", o:["fire","water","milk","stone"]},
+        {q:"Ishuri means?", a:"school", o:["home","school","market","road"]}
+      ];
+
+      let q = data[Math.floor(Math.random() * data.length)];
+      correct = q.a;
+
+      document.getElementById("question").innerText = q.q;
+      showOptions(q.o);
+    },
+
+    english: () => {
+      let data = [
+        {q:"Cat means?", a:"inyamaswa", o:["inyamaswa","inzu","imodoka","igitabo"]},
+        {q:"School means?", a:"ishuri", o:["ishuri","isoko","umuhanda","urugo"]},
+        {q:"Book means?", a:"igitabo", o:["igitabo","amazi","isoko","urugo"]}
+      ];
+
+      let q = data[Math.floor(Math.random() * data.length)];
+      correct = q.a;
+
+      document.getElementById("question").innerText = q.q;
+      showOptions(q.o);
+    },
+
+    science: () => {
+      let data = [
+        {q:"Water formula?", a:"H2O", o:["CO2","H2O","O2","NaCl"]},
+        {q:"Sun is a?", a:"star", o:["planet","star","moon","rock"]},
+        {q:"Humans breathe?", a:"oxygen", o:["hydrogen","oxygen","carbon","iron"]}
+      ];
+
+      let q = data[Math.floor(Math.random() * data.length)];
+      correct = q.a;
+
+      document.getElementById("question").innerText = q.q;
+      showOptions(q.o);
+    },
+
+    social: () => {
+      let data = [
+        {q:"Capital of Rwanda?", a:"Kigali", o:["Butare","Kigali","Gisenyi","Musanze"]},
+        {q:"Our country?", a:"Rwanda", o:["Kenya","Uganda","Rwanda","Tanzania"]},
+        {q:"Africa is a?", a:"continent", o:["country","continent","city","village"]}
+      ];
+
+      let q = data[Math.floor(Math.random() * data.length)];
+      correct = q.a;
+
+      document.getElementById("question").innerText = q.q;
+      showOptions(q.o);
+    }
+  };
+
+  banks[subject]();
+};
+
+/* ================= OPTIONS ================= */
+function showOptions(options) {
+  let div = document.getElementById("options");
+  div.innerHTML = "";
+
+  options.sort(() => Math.random() - 0.5);
+
+  options.forEach(opt => {
+    let d = document.createElement("div");
+    d.className = "option";
+    d.innerText = opt;
+
+    d.onclick = () => selected = opt;
+
+    div.appendChild(d);
+  });
+}
+
+/* ================= SPEECH ================= */
+function speak(text) {
+  let msg = new SpeechSynthesisUtterance(text);
+  msg.lang = "en-US";
+  speechSynthesis.speak(msg);
+}
+
+/* ================= SUBMIT ================= */
+window.submitAnswer = async function () {
+  if (!selected) return alert("Select answer!");
+
+  if (selected == correct) {
+    score++;
+    speak("Correct!");
+  } else {
+    speak("Wrong answer");
+  }
+
+  document.getElementById("score").innerText = score;
+
+  await setDoc(doc(db, "leaderboard", student), {
+    name: student,
+    score: score
+  });
+};
+
+/* ================= LEADERBOARD ================= */
+window.showLeaderboard = function () {
+  const q = query(collection(db, "leaderboard"), orderBy("score","desc"));
+
+  onSnapshot(q, snap => {
+    let html = "";
+    let rank = 1;
+
+    snap.forEach(doc => {
+      let s = doc.data();
+      html += `<p>🏆 ${rank}. ${s.name} - ${s.score}</p>`;
+      rank++;
+    });
+
+    document.getElementById("leaderboard").innerHTML = html;
+  });
+};
+
+/* ================= BACKGROUND ROTATION FIXED ================= */
+const backgrounds = [
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b",
+  "https://images.unsplash.com/photo-1529070538774-1843cb3265df",
+  "https://images.unsplash.com/photo-1588072432836-e10032774350",
+  "https://images.unsplash.com/photo-1509062522246-3755977927d7",
+
+  "https://images.unsplash.com/photo-1523240795612-9a054b0db644",
+  "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b",
+  "https://images.unsplash.com/photo-1509062522246-3a1f5f5c8a2b",
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0",
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655",
+
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f",
+  "https://images.unsplash.com/photo-1519452575417-564c1401ecc0",
+  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format",
+  "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format",
+
+  "https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format",
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6",
+  "https://images.unsplash.com/photo-1552581234-26160f608093",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?sig=1",
+  "https://images.unsplash.com/photo-1529070538774-1843cb3265df?sig=2",
+
+  "https://images.unsplash.com/photo-1588072432836-e10032774350?sig=3",
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?sig=4",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?sig=5",
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?sig=6",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?sig=7",
+
+  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?sig=8",
+  "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?sig=9",
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?sig=10",
+  "https://images.unsplash.com/photo-1552581234-26160f608093?sig=11",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?sig=12",
+
+  "https://images.unsplash.com/photo-1529070538774-1843cb3265df?sig=13",
+  "https://images.unsplash.com/photo-1588072432836-e10032774350?sig=14",
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?sig=15",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?sig=16",
+  "https://images.unsplash.com/photo-1519452575417-564c1401ecc0?sig=17",
+
+  "https://images.unsplash.com/photo-1523240795612-9a054b0db644?sig=18",
+  "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?sig=19",
+  "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?sig=20",
+  "https://images.unsplash.com/photo-1552581234-26160f608093?sig=21",
+  "https://images.unsplash.com/photo-1509062522246-3755977927d7?sig=22",
+
+  "https://images.unsplash.com/photo-1513258496099-48168024aec0?sig=23",
+  "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?sig=24",
+  "https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?sig=25",
+  "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?sig=26",
+  "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?sig=27"
+];
+
+
+let i = 0;
+
+function changeBackground() {
+  const url = backgrounds[i] + "?t=" + Date.now();
+
+  document.body.style.backgroundImage = `url("${url}")`;
+  document.body.style.backgroundSize = "cover";
+  document.body.style.backgroundPosition = "center";
+  document.body.style.backgroundRepeat = "no-repeat";
+
+  i = (i + 1) % backgrounds.length;
+}
+
+changeBackground();
+setInterval(changeBackground, 20000);
+window.logout = function () {
+  // stop timer
+  clearInterval(interval);
+
+  // reset variables
+  student = "";
+  score = 0;
+  selected = "";
+  correct = "";
+
+  // reset UI
+  document.getElementById("score").innerText = "0";
+  document.getElementById("result").innerText = "";
+  document.getElementById("question").innerText = "";
+  document.getElementById("options").innerHTML = "";
+  document.getElementById("timer").innerText = "30";
+
+  // hide game, show login
+  document.getElementById("gameBox").classList.add("hidden");
+  document.getElementById("loginBox").classList.remove("hidden");
+
+  // clear input
+  document.getElementById("studentName").value = "";
+
+  // optional: remove saved user
+  localStorage.removeItem("currentStudent");
+
+  speak("You have logged out successfully");
+};
+function updateClock() {
+  const now = new Date();
+
+  // Kigali time (UTC+2)
+  const options = {
+    timeZone: "Africa/Kigali",
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  };
+
+  const formatter = new Intl.DateTimeFormat("en-US", options);
+  const parts = formatter.formatToParts(now);
+
+  let date = "";
+  let time = "";
+
+  parts.forEach(p => {
+    if (p.type === "weekday" || p.type === "day" || p.type === "month" || p.type === "year") {
+      date += p.value + " ";
+    }
+    if (p.type === "hour" || p.type === "minute" || p.type === "second") {
+      time += p.value + " ";
+    }
+  });
+
+  document.getElementById("clock").innerHTML =
+    `🕒 ${time.trim()} <br> 📅 ${date.trim()}`;
+
+  changeBackgroundByTime();
+}
+
+setInterval(updateClock, 1000);
+updateClock();
+function changeBackgroundByTime() {
+  const hour = new Date().getHours();
+
+  let bg = "";
+
+  if (hour >= 5 && hour < 12) {
+    // Morning
+    bg = "https://images.unsplash.com/photo-1506784365847-bbad939e9335";
+  } 
+  else if (hour >= 12 && hour < 18) {
+    // Afternoon
+    bg = "https://images.unsplash.com/photo-1529070538774-1843cb3265df";
+  } 
+  else {
+    // Night
+    bg = "https://images.unsplash.com/photo-1504384308090-c894fdcc538d";
+  }
+
+  document.body.style.backgroundImage = `url('${bg}')`;
+  document.body.style.backgroundSize = "cover";
+  document.body.style.backgroundPosition = "center";
+}
+</script>
+</body>
+</html>
