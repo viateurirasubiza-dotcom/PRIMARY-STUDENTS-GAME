@@ -597,6 +597,49 @@ function changeBackgroundByTime() {
   document.body.style.backgroundSize = "cover";
   document.body.style.backgroundPosition = "center";
 }
+  window.restart = function () {
+
+  // stop timer
+  clearInterval(interval);
+
+  // reset variables
+  score = 0;
+  selected = "";
+  correct = "";
+  timer = 30;
+
+  // reset UI
+  document.getElementById("score").innerText = "0";
+  document.getElementById("timer").innerText = "30";
+  document.getElementById("question").innerText = "";
+  document.getElementById("options").innerHTML = "";
+  document.getElementById("result").innerText = "";
+
+  // animation
+  const gameBox = document.getElementById("gameBox");
+
+  gameBox.classList.add("zoom-reset");
+
+  setTimeout(() => {
+    gameBox.classList.remove("zoom-reset");
+  }, 400);
+
+  // toast message
+  showToast("🔁 Game Restarted");
+
+  // voice
+  speak("Game restarted successfully");
+
+  // confetti
+  confetti({
+    particleCount: 100,
+    spread: 70,
+    origin: { y: 0.6 }
+  });
+
+  // start new question
+  generateQuestion();
+};
 </script>
 </body>
 </html>
